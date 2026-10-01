@@ -9,13 +9,13 @@ on port 10400. English only.
 
 ```sh
 cp config.example.toml config.toml
-docker compose up -d --build
+docker compose up -d
 ```
 
 The first start downloads both models into the `nemo-models` volume. The image
-builds the CPU backend. For a GPU, set `NEMO_BACKEND` to `cuda` or `vulkan` in
-`compose.yml`, uncomment the matching device lines there, and set `device` in
-`config.toml`.
+is the Vulkan build, which runs on the CPU and on any GPU with a Vulkan driver.
+For a GPU, uncomment the matching lines in `compose.yml` and set `device` in
+`config.toml`. `docker compose build` builds the image locally.
 
 ## Without Docker
 

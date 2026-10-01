@@ -1,0 +1,27 @@
+services:
+  speech:
+    image: ghcr.io/jermatic1/wyoming-nemo-speech:latest
+    build:
+      context: .
+      args:
+        NEMO_BACKEND: vulkan   # or cuda, for a local build on an NVIDIA host
+    volumes:
+      - ./config.toml:/app/config.toml:ro
+      - nemo-models:/models
+    ports:
+      - "10400:10400"
+    restart: unless-stopped
+    cap_drop:
+      - all
+    security_opt:
+      - no-new-privileges:true
+    # AMD or Intel GPU:
+    # devices:
+    #   - /dev/dri
+    # NVIDIA GPU, with the NVIDIA Container Toolkit installed:
+    # gpus: all
+    # environment:
+    #   NVIDIA_DRIVER_CAPABILITIES: all
+
+volumes:
+  nemo-models:
