@@ -1,0 +1,35 @@
+version: "3"
+
+tasks:
+  setup:
+    desc: Install Python dependencies
+    cmds:
+      - uv sync
+
+  serve:
+    desc: Serve Wyoming ASR and TTS on port 10400
+    cmds:
+      - uv run wyoming-nemo-speech
+
+  test:
+    desc: Run tests
+    cmds:
+      - uv run pytest -q
+
+  lint:
+    desc: Check lint and formatting
+    cmds:
+      - uv run ruff check .
+      - uv run ruff format --check .
+
+  typecheck:
+    desc: Check types
+    cmds:
+      - uv run basedpyright
+
+  check:
+    desc: Run tests, lint, formatting, and type checks
+    cmds:
+      - task: test
+      - task: lint
+      - task: typecheck
