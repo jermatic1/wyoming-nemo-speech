@@ -1,0 +1,24 @@
+# Copy to config.toml. Every key is optional; these are the defaults.
+
+# NeMo-Speech.cpp install prefix. Defaults to /opt/nemo-speech if it exists,
+# otherwise ~/.local/share/nemo-speech.
+# lib_dir = "~/.local/share/nemo-speech"
+
+# cpu, cuda:N, or vulkan:N
+device = "cpu"
+
+uri = "tcp://0.0.0.0:10400"
+debug = false
+
+[asr]
+model = "nemotron-en"
+# How strongly Home Assistant names bias recognition.
+speech_context_boost = 2.5
+
+[tts]
+model = "magpie"
+
+[home_assistant]
+url = "http://homeassistant.local:8123"
+# A long-lived access token. Names are only fetched when this is set.
+token = ""

@@ -1,3 +1,45 @@
 # Wyoming NeMo Speech
 
-Wyoming protocol server for the NeMo Speech system.
+A [Wyoming](https://github.com/OHF-Voice/wyoming) server for Home Assistant that
+runs [NeMo-Speech.cpp](https://github.com/NVIDIA/NeMo-Speech.cpp) locally. One
+process provides speech-to-text with `nemotron-en` and text-to-speech with Magpie
+on port 10400. English only.
+
+## Docker
+
+```sh
+cp config.example.toml config.toml
+docker compose up -d --build
+```
+
+The first start downloads both models into the `nemo-models` volume. The image
+builds the CPU backend. For a GPU, set `NEMO_BACKEND` to `cuda` or `vulkan` in
+`compose.yml`, uncomment the matching device lines there, and set `device` in
+`config.toml`.
+
+## Without Docker
+
+Install NeMo-Speech.cpp, then run the server with uv. `--backend` is `cpu`,
+`cuda`, or `vulkan`. Models are downloaded on first start.
+
+```sh
+curl -fsSL https://github.com/NVIDIA/NeMo-Speech.cpp/raw/v0.1.0/scripts/install.sh |
+  sh -s -- --version 0.1.0 --backend cpu
+uv sync
+uv run wyoming-nemo-speech
+```
+
+## Home Assistant
+
+Add the Wyoming Protocol integration with the server's host and port 10400. It
+provides a speech-to-text and a text-to-speech engine for an Assist pipeline.
+
+To bias recognition toward the names of your areas and exposed entities, create
+a long-lived access token in your Home Assistant profile and set
+`home_assistant.token` in `config.toml`. Names are fetched at startup and
+refreshed once a day.
+
+## Configuration
+
+The server reads `config.toml` from the working directory. Every key is
+optional. See `config.example.toml` for the keys and their defaults.
