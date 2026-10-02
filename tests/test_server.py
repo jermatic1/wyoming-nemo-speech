@@ -165,6 +165,13 @@ async def test_synthesize_streams_pcm() -> None:
     assert AudioStop.is_type(handler.sent[-1].type)
 
 
+async def test_synthesize_spells_out_numbers() -> None:
+    synthesizer = FakeSynthesizer()
+    handler = RecordingHandler(FakeRecognizer(), synthesizer)
+    assert await handler.handle_event(Synthesize("It is 27°.").event())
+    assert synthesizer.calls[0][0] == "It is twenty-seven degrees."
+
+
 async def test_unknown_voice_uses_default() -> None:
     synthesizer = FakeSynthesizer()
     handler = RecordingHandler(FakeRecognizer(), synthesizer)

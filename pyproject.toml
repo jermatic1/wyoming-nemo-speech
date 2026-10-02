@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.14.3",
     "cffi>=2.1.1",
+    "inflect>=7.5.0",
     "wyoming>=1.10.2",
 ]
 

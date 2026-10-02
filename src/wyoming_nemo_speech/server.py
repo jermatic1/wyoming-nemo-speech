@@ -16,6 +16,7 @@ from wyoming.tts import Synthesize
 from wyoming_nemo_speech.asr import Recognizer
 from wyoming_nemo_speech.libasr import pcm16_to_f32
 from wyoming_nemo_speech.names import HassNameCache
+from wyoming_nemo_speech.normalize import spoken
 from wyoming_nemo_speech.tts import Synthesizer, resolve_voice
 
 _LOGGER = logging.getLogger(__name__)
@@ -92,6 +93,8 @@ class SpeechEventHandler(AsyncEventHandler):
         if request.voice is not None:
             requested = request.voice.name or request.voice.speaker
         voice = resolve_voice(requested, self._synthesizer.speakers)
+        text = spoken(request.text)
+        _LOGGER.debug("Synthesizing: %s", text)
         rate = self._synthesizer.sample_rate
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[bytes | None] = asyncio.Queue()
@@ -103,7 +106,7 @@ class SpeechEventHandler(AsyncEventHandler):
         async def run() -> None:
             try:
                 await asyncio.to_thread(
-                    self._synthesizer.synthesize, request.text, voice, LANGUAGE, on_pcm
+                    self._synthesizer.synthesize, text, voice, LANGUAGE, on_pcm
                 )
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, None)
