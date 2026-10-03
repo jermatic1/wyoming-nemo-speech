@@ -1,6 +1,6 @@
 FROM python:3.12-slim-trixie
 
-ARG NEMO_SPEECH_VERSION=0.1.0
+ARG NEMO_SPEECH_VERSION=0.2.0
 # vulkan runs on CPU and on any GPU with a Vulkan driver. cuda needs an NVIDIA driver.
 ARG NEMO_BACKEND=vulkan
 

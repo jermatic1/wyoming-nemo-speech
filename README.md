@@ -23,8 +23,8 @@ Install NeMo-Speech.cpp, then run the server with uv. `--backend` is `cpu`,
 `cuda`, or `vulkan`. Models are downloaded on first start.
 
 ```sh
-curl -fsSL https://github.com/NVIDIA/NeMo-Speech.cpp/raw/v0.1.0/scripts/install.sh |
-  sh -s -- --version 0.1.0 --backend cpu
+curl -fsSL https://github.com/NVIDIA/NeMo-Speech.cpp/raw/v0.2.0/scripts/install.sh |
+  sh -s -- --version 0.2.0 --backend cpu
 uv sync
 uv run wyoming-nemo-speech
 ```
