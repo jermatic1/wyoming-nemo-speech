@@ -29,7 +29,10 @@ def run() -> None:
 
 async def main() -> None:
     config = load_config()
-    logging.basicConfig(level=logging.DEBUG if config.debug else logging.INFO)
+    logging.basicConfig(
+        level=logging.DEBUG if config.debug else logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     gpu = gpu_index(config.device)
     if config.device.lower().startswith("vulkan") and gpu >= 0:
         # ggml renumbers the visible device to 0.

@@ -5,6 +5,8 @@ from __future__ import annotations
 import array
 import asyncio
 import logging
+import time
+from dataclasses import dataclass
 
 from wyoming.asr import Transcript
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
@@ -31,6 +33,31 @@ _LOGGER = logging.getLogger(__name__)
 LANGUAGE = "en-US"
 
 
+@dataclass
+class _Timing:
+    """Synthesizer time and audio produced for one request or stream."""
+
+    started: float
+    first_pcm: float | None = None
+    busy: float = 0.0
+    audio_bytes: int = 0
+
+    def record(self, n_bytes: int) -> None:
+        if self.first_pcm is None:
+            self.first_pcm = time.perf_counter()
+        self.audio_bytes += n_bytes
+
+    def summary(self, rate: int) -> str:
+        if self.audio_bytes == 0 or self.first_pcm is None:
+            return "Synthesized no audio"
+        seconds = self.audio_bytes / (2 * rate)
+        first = self.first_pcm - self.started
+        return (
+            f"Synthesized {seconds:.1f}s audio in {self.busy:.2f}s "
+            f"(first chunk {first:.2f}s, RTF {self.busy / seconds:.2f})"
+        )
+
+
 class SpeechEventHandler(AsyncEventHandler):
     def __init__(
         self,
@@ -52,6 +79,7 @@ class SpeechEventHandler(AsyncEventHandler):
         self._samples: list[array.array] = []
         self._tts_voice: str | None = None
         self._tts_text: str | None = None
+        self._tts_timing: _Timing | None = None
 
     async def handle_event(self, event: Event) -> bool:
         if Describe.is_type(event.type):
@@ -87,7 +115,10 @@ class SpeechEventHandler(AsyncEventHandler):
 
     async def _transcribe(self) -> None:
         text = ""
+        seconds = 0.0
+        begin = time.perf_counter()
         if self._samples and self._rate:
+            seconds = sum(len(chunk) for chunk in self._samples) / self._rate
             phrases = self._names.phrases() if self._names is not None else []
             try:
                 text = await asyncio.to_thread(
@@ -100,7 +131,12 @@ class SpeechEventHandler(AsyncEventHandler):
                 )
             except Exception:
                 _LOGGER.exception("Recognition failed")
-        _LOGGER.info("Transcript: %s", text)
+        _LOGGER.info(
+            "Transcript (%.1fs audio, %.2fs): %s",
+            seconds,
+            time.perf_counter() - begin,
+            text,
+        )
         await self.write_event(Transcript(text=text, language=LANGUAGE).event())
         if self._names is not None:
             self._names.maybe_refresh()
@@ -111,7 +147,7 @@ class SpeechEventHandler(AsyncEventHandler):
         await self.write_event(self._audio_start())
         for sentence in [*complete, rest]:
             await self._speak(sentence, voice)
-        await self.write_event(AudioStop().event())
+        await self._audio_stop()
 
     async def _start_stream(self, request: SynthesizeStart) -> None:
         self._tts_voice = self._voice(request.voice)
@@ -132,7 +168,7 @@ class SpeechEventHandler(AsyncEventHandler):
             return
         rest, self._tts_text = self._tts_text, None
         await self._speak(rest, self._tts_voice)
-        await self.write_event(AudioStop().event())
+        await self._audio_stop()
         await self.write_event(SynthesizeStopped().event())
 
     def _voice(self, requested: SynthesizeVoice | None) -> str | None:
@@ -144,11 +180,21 @@ class SpeechEventHandler(AsyncEventHandler):
     def _audio_start(self) -> Event:
         return AudioStart(self._synthesizer.sample_rate, 2, 1).event()
 
+    async def _audio_stop(self) -> None:
+        timing, self._tts_timing = self._tts_timing, None
+        if timing is not None:
+            _LOGGER.info(timing.summary(self._synthesizer.sample_rate))
+        await self.write_event(AudioStop().event())
+
     async def _speak(self, text: str, voice: str | None) -> None:
         text = spoken(" ".join(text.split()))
         if not text:
             return
         _LOGGER.debug("Synthesizing: %s", text)
+        if self._tts_timing is None:
+            self._tts_timing = _Timing(started=time.perf_counter())
+        timing = self._tts_timing
+        begin = time.perf_counter()
         rate = self._synthesizer.sample_rate
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[bytes | None] = asyncio.Queue()
@@ -167,11 +213,13 @@ class SpeechEventHandler(AsyncEventHandler):
 
         task = asyncio.create_task(run())
         while (pcm := await queue.get()) is not None:
+            timing.record(len(pcm))
             await self.write_event(AudioChunk(rate, 2, 1, pcm).event())
         try:
             await task
         except Exception:
             _LOGGER.exception("Synthesis failed: %s", text)
+        timing.busy += time.perf_counter() - begin
 
 
 def _concat(chunks: list[array.array]) -> array.array:

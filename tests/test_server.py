@@ -1,4 +1,5 @@
 import array
+import logging
 
 import pytest
 from wyoming.asr import Transcribe, Transcript
@@ -262,3 +263,35 @@ async def test_stream_events_without_start_are_ignored() -> None:
     assert await handler.handle_event(SynthesizeStop().event())
     assert synthesizer.calls == []
     assert handler.sent == []
+
+
+async def test_transcription_logs_audio_and_wall_time(caplog) -> None:
+    handler = RecordingHandler(FakeRecognizer(), FakeSynthesizer())
+    with caplog.at_level(logging.INFO):
+        await utterance(handler, pcm16(*[0] * 16000))
+    assert "Transcript (1.0s audio, " in caplog.text
+    assert "): office lights" in caplog.text
+
+
+async def test_synthesis_logs_one_summary_per_stream(caplog) -> None:
+    handler = RecordingHandler(FakeRecognizer(), FakeSynthesizer())
+    with caplog.at_level(logging.INFO):
+        assert await handler.handle_event(SynthesizeStart().event())
+        assert await handler.handle_event(SynthesizeChunk("One two three. ").event())
+        assert await handler.handle_event(SynthesizeChunk("Four five six.").event())
+        assert await handler.handle_event(SynthesizeStop().event())
+    summaries = [
+        r.message for r in caplog.records if r.message.startswith("Synthesized")
+    ]
+    assert len(summaries) == 1
+    assert "audio in " in summaries[0] and "RTF " in summaries[0]
+
+
+async def test_failed_synthesis_logs_text_and_no_audio(caplog) -> None:
+    synthesizer = FakeSynthesizer()
+    synthesizer.error = RuntimeError("boom")
+    handler = RecordingHandler(FakeRecognizer(), synthesizer)
+    with caplog.at_level(logging.INFO):
+        assert await handler.handle_event(Synthesize("Hello world here.").event())
+    assert "Synthesis failed: Hello world here." in caplog.text
+    assert "Synthesized no audio" in caplog.text
