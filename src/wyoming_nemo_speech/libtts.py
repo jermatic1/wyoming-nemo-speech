@@ -183,6 +183,9 @@ class Synthesizer:
         model.tokenizer_model_dir = tokenizer_path
         runtime = ffi.new("nemo_speech_tts_runtime_config*")
         runtime[0] = self._lib.nemo_speech_tts_runtime_config_default()
+        # Longform (sentence-chunk) mode can abort on a history-cache size
+        # mismatch in NeMo-Speech.cpp. The server sends one sentence per call.
+        runtime.longform_mode = self._lib.NEMO_SPEECH_TTS_LONGFORM_OFF
         if gpu < 0:
             runtime.lt_backend = self._lib.NEMO_SPEECH_TTS_BACKEND_CPU
             runtime.sampling_backend = self._lib.NEMO_SPEECH_TTS_BACKEND_CPU

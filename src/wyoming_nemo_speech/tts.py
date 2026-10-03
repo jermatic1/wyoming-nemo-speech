@@ -51,5 +51,5 @@ def tts_program(speakers: list[str], version: str | None = None) -> TtsProgram:
             )
             for speaker in speakers
         ],
-        supports_synthesize_streaming=False,
+        supports_synthesize_streaming=True,
     )

@@ -33,6 +33,7 @@ uv run wyoming-nemo-speech
 
 Add the Wyoming Protocol integration with the server's host and port 10400. It
 provides a speech-to-text and a text-to-speech engine for an Assist pipeline.
+Text-to-speech is streamed, so playback starts on the first sentence of a reply.
 
 To bias recognition toward the names of your areas and exposed entities, create
 a long-lived access token in your Home Assistant profile and set

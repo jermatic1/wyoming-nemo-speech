@@ -1,6 +1,6 @@
 import pytest
 
-from wyoming_nemo_speech.normalize import spoken
+from wyoming_nemo_speech.normalize import sentences, spoken
 
 
 @pytest.mark.parametrize(
@@ -25,3 +25,24 @@ from wyoming_nemo_speech.normalize import spoken
 )
 def test_spoken(text: str, expected: str) -> None:
     assert spoken(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "complete", "rest"),
+    [
+        ("Hello again there. How are", ["Hello again there."], " How are"),
+        ("The light is on! Is that all? ", ["The light is on!", "Is that all?"], " "),
+        (
+            "First line here\nSecond line here\n",
+            ["First line here", "Second line here"],
+            "",
+        ),
+        ("It is 3.5 degrees out. Next one", ["It is 3.5 degrees out."], " Next one"),
+        ("Dr. Smith is here. Next one", ["Dr. Smith is here."], " Next one"),
+        ("OK. The light is on. Next", ["OK. The light is on."], " Next"),
+        ('He said "Stop here." Then left', ['He said "Stop here."'], " Then left"),
+        ("No boundary yet", [], "No boundary yet"),
+    ],
+)
+def test_sentences(text: str, complete: list[str], rest: str) -> None:
+    assert sentences(text) == (complete, rest)

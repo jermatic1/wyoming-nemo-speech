@@ -1,4 +1,4 @@
-"""Spell out numbers and symbols. Magpie cannot read digits."""
+"""Prepare text for Magpie: split into sentences, spell out numbers and symbols."""
 
 from __future__ import annotations
 
@@ -16,6 +16,35 @@ _PERCENT = re.compile(r"(-?\d[\d,]*(?:\.\d+)?)\s*%")
 _NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 
 _SCALES = {"C": " Celsius", "F": " Fahrenheit"}
+
+_BOUNDARY = re.compile(r"[.!?]+[\"')\]]*(?=\s)|\n")
+_ABBREVIATIONS = {"dr", "mr", "mrs", "ms", "st", "vs", "etc", "e.g", "i.e"}
+_MIN_WORDS = 3
+
+
+def sentences(text: str) -> tuple[list[str], str]:
+    """Split off complete sentences and return them with the unfinished rest.
+
+    Fragments shorter than a few words are merged into the next sentence.
+    """
+    complete: list[str] = []
+    start = 0
+    for match in _BOUNDARY.finditer(text):
+        if match.group().startswith(".") and _ends_abbreviation(text[: match.start()]):
+            continue
+        candidate = " ".join(text[start : match.end()].split())
+        if len(candidate.split()) < _MIN_WORDS:
+            continue
+        complete.append(candidate)
+        start = match.end()
+    return complete, text[start:]
+
+
+def _ends_abbreviation(text: str) -> bool:
+    words = text.split()
+    word = words[-1].lstrip("\"'([") if words else ""
+    initial = len(word) == 1 and word.isalpha()
+    return initial or word.lower() in _ABBREVIATIONS
 
 
 def spoken(text: str) -> str:

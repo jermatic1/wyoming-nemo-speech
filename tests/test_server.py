@@ -5,7 +5,13 @@ from wyoming.asr import Transcribe, Transcript
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.event import Event
 from wyoming.info import Describe, Info
-from wyoming.tts import Synthesize, SynthesizeVoice
+from wyoming.tts import (
+    Synthesize,
+    SynthesizeChunk,
+    SynthesizeStart,
+    SynthesizeStop,
+    SynthesizeVoice,
+)
 
 from wyoming_nemo_speech.asr import asr_program
 from wyoming_nemo_speech.names import HassNameCache, NameList
@@ -43,7 +49,8 @@ class FakeSynthesizer:
     def synthesize(self, text, voice, language, on_pcm) -> None:
         self.calls.append((text, voice, language))
         if self.error is not None:
-            raise self.error
+            error, self.error = self.error, None
+            raise error
         on_pcm(b"\x01\x00\x02\x00")
         on_pcm(b"\x03\x00")
 
@@ -186,3 +193,72 @@ async def test_synthesis_failure_still_sends_start_and_stop() -> None:
     handler = RecordingHandler(FakeRecognizer(), synthesizer)
     assert await handler.handle_event(Synthesize("Hello").event())
     assert [event.type for event in handler.sent] == ["audio-start", "audio-stop"]
+
+
+async def test_synthesize_speaks_each_sentence() -> None:
+    synthesizer = FakeSynthesizer()
+    handler = RecordingHandler(FakeRecognizer(), synthesizer)
+    assert await handler.handle_event(Synthesize("It is on. Anything else?").event())
+    assert [call[0] for call in synthesizer.calls] == ["It is on.", "Anything else?"]
+    types = [event.type for event in handler.sent]
+    assert types == ["audio-start"] + ["audio-chunk"] * 4 + ["audio-stop"]
+
+
+async def test_failed_sentence_does_not_stop_the_rest() -> None:
+    synthesizer = FakeSynthesizer()
+    synthesizer.error = RuntimeError("boom")
+    handler = RecordingHandler(FakeRecognizer(), synthesizer)
+    assert await handler.handle_event(Synthesize("It is on. Anything else?").event())
+    assert len(synthesizer.calls) == 2
+    types = [event.type for event in handler.sent]
+    assert types == ["audio-start"] + ["audio-chunk"] * 2 + ["audio-stop"]
+
+
+async def test_streaming_synthesis_splits_sentences_across_chunks() -> None:
+    synthesizer = FakeSynthesizer()
+    handler = RecordingHandler(FakeRecognizer(), synthesizer)
+    start = SynthesizeStart(voice=SynthesizeVoice(name="sofia"))
+    assert await handler.handle_event(start.event())
+    for text in ["The light is on. It is 2", "1 degrees out", "side. Anything else?"]:
+        assert await handler.handle_event(SynthesizeChunk(text).event())
+    assert await handler.handle_event(SynthesizeStop().event())
+    assert synthesizer.calls == [
+        ("The light is on.", "Sofia", "en-US"),
+        ("It is twenty-one degrees outside.", "Sofia", "en-US"),
+        ("Anything else?", "Sofia", "en-US"),
+    ]
+    types = [event.type for event in handler.sent]
+    assert types[0] == "audio-start"
+    assert types.count("audio-start") == 1
+    assert types.count("audio-chunk") == 6
+    assert types[-2:] == ["audio-stop", "synthesize-stopped"]
+
+
+async def test_full_text_synthesize_inside_stream_is_ignored() -> None:
+    synthesizer = FakeSynthesizer()
+    handler = RecordingHandler(FakeRecognizer(), synthesizer)
+    text = "The kitchen light is on."
+    assert await handler.handle_event(SynthesizeStart().event())
+    assert await handler.handle_event(SynthesizeChunk(text).event())
+    assert await handler.handle_event(Synthesize(text).event())
+    assert await handler.handle_event(SynthesizeStop().event())
+    assert [call[0] for call in synthesizer.calls] == [text]
+    types = [event.type for event in handler.sent]
+    assert types == [
+        "audio-start",
+        "audio-chunk",
+        "audio-chunk",
+        "audio-stop",
+        "synthesize-stopped",
+    ]
+    assert await handler.handle_event(Synthesize("Hi there again.").event())
+    assert len(synthesizer.calls) == 2
+
+
+async def test_stream_events_without_start_are_ignored() -> None:
+    synthesizer = FakeSynthesizer()
+    handler = RecordingHandler(FakeRecognizer(), synthesizer)
+    assert await handler.handle_event(SynthesizeChunk("Hello.").event())
+    assert await handler.handle_event(SynthesizeStop().event())
+    assert synthesizer.calls == []
+    assert handler.sent == []
