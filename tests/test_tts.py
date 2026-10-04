@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from wyoming_nemo_speech.libtts import ffi, library_path
+from wyoming_nemo_speech.libtts import ffi, library_path, speaker_map
 from wyoming_nemo_speech.tts import resolve_voice, tts_program
 
 
@@ -32,3 +32,20 @@ def test_installed_library_matches_cdef() -> None:
     options = library.lib.nemo_speech_tts_synthesis_options_default()
     assert runtime.size == ffi.sizeof("nemo_speech_tts_runtime_config")
     assert options.size == ffi.sizeof("nemo_speech_tts_synthesis_options")
+
+
+def test_speaker_map_reads_the_model_file(tmp_path: Path) -> None:
+    (tmp_path / "abc_magpie.nemo.speakers.json").write_text(
+        '{"Aria": 0, "Jason": 1, "John": 2, "Leo": 3, "Sofia": 4}'
+    )
+    assert speaker_map(tmp_path) == {
+        "Aria": 0,
+        "Jason": 1,
+        "John": 2,
+        "Leo": 3,
+        "Sofia": 4,
+    }
+
+
+def test_speaker_map_is_none_without_the_file(tmp_path: Path) -> None:
+    assert speaker_map(tmp_path) is None

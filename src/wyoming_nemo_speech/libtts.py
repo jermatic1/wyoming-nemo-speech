@@ -3,6 +3,7 @@
 # pyright: reportAttributeAccessIssue=false
 from __future__ import annotations
 
+import json
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -162,6 +163,19 @@ class TtsLibrary:
         return Synthesizer(self, magpie, codec, tokenizer, gpu)
 
 
+def speaker_map(tokenizer: Path) -> dict[str, int] | None:
+    """Read the model's own speaker map from the tokenizer directory.
+
+    The GGUF's speaker name list can disagree with its baked speaker rows (the
+    v2607 package does), so voices are mapped through this file when it exists.
+    """
+    files = sorted(tokenizer.glob("*speakers.json"))
+    if not files:
+        return None
+    data = json.loads(files[0].read_text())
+    return {str(name): int(index) for name, index in data.items()}
+
+
 class Synthesizer:
     def __init__(
         self,
@@ -212,12 +226,14 @@ class Synthesizer:
         ]
         try:
             self.sample_rate = int(self._lib.nemo_speech_tts_sample_rate(self._handle))
-            self.speakers = [
-                self._speaker_name(index)
-                for index in range(
-                    self._lib.nemo_speech_tts_speaker_count(self._handle)
-                )
-            ]
+            count = self._lib.nemo_speech_tts_speaker_count(self._handle)
+            self.speakers = [self._speaker_name(index) for index in range(count)]
+            self._speaker_index = speaker_map(tokenizer) or {}
+            if any(index >= count for index in self._speaker_index.values()):
+                self._speaker_index = {}
+            if self._speaker_index:
+                by_index = sorted(self._speaker_index.items(), key=lambda item: item[1])
+                self.speakers = [name for name, _ in by_index]
         except Exception:
             self.close()
             raise
@@ -252,7 +268,9 @@ class Synthesizer:
                 return False
 
         keepalive.append(callback)
-        if voice:
+        if voice and voice in self._speaker_index:
+            options.speaker = self._speaker_index[voice]
+        elif voice:
             encoded_voice = ffi.new("char[]", voice.encode())
             keepalive.append(encoded_voice)
             options.voice_name = encoded_voice
