@@ -175,7 +175,9 @@ class SpeechEventHandler(AsyncEventHandler):
         name = None
         if requested is not None:
             name = requested.name or requested.speaker
-        return resolve_voice(name, self._synthesizer.speakers)
+        voice = resolve_voice(name, self._synthesizer.speakers)
+        _LOGGER.debug("Voice requested: %s, using: %s", name, voice or "default")
+        return voice
 
     def _audio_start(self) -> Event:
         return AudioStart(self._synthesizer.sample_rate, 2, 1).event()
