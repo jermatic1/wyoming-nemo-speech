@@ -8,7 +8,7 @@ from wyoming_nemo_speech.tts import resolve_voice, tts_program
 
 def test_tts_program() -> None:
     program = tts_program(["John", "Sofia"], "0.1.0")
-    assert program.name == "magpie"
+    assert program.name == "Magpie"
     assert [voice.name for voice in program.voices] == ["John", "Sofia"]
     assert program.voices[0].languages == ["en"]
     assert program.voices[0].version == "0.1.0"

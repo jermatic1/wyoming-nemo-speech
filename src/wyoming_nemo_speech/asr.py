@@ -27,7 +27,7 @@ class Recognizer(Protocol):
 
 def asr_program(model: str, version: str | None = None) -> AsrProgram:
     return AsrProgram(
-        name="nemotron",
+        name="Nemotron",
         description="NeMo Speech recognition",
         attribution=ATTRIBUTION,
         installed=True,

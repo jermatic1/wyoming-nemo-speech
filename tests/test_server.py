@@ -93,7 +93,7 @@ async def test_describe_advertises_both_programs() -> None:
     handler = RecordingHandler(FakeRecognizer(), FakeSynthesizer())
     assert await handler.handle_event(Describe().event())
     info = Info.from_event(handler.sent[0])
-    assert info.asr[0].name == "nemotron"
+    assert info.asr[0].name == "Nemotron"
     assert info.asr[0].requires_external_vad is True
     assert info.asr[0].models[0].languages == ["en"]
     assert [voice.name for voice in info.tts[0].voices] == ["John", "Sofia"]

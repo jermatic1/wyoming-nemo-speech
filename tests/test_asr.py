@@ -14,7 +14,7 @@ def pcm16(*samples: int) -> bytes:
 
 def test_asr_program() -> None:
     program = asr_program("nemotron-en", "0.1.0")
-    assert program.name == "nemotron"
+    assert program.name == "Nemotron"
     assert program.requires_external_vad is True
     assert program.models[0].name == "nemotron-en"
     assert program.models[0].version == "0.1.0"

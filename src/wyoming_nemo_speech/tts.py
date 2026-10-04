@@ -35,7 +35,7 @@ def resolve_voice(requested: str | None, speakers: list[str]) -> str | None:
 
 def tts_program(speakers: list[str], version: str | None = None) -> TtsProgram:
     return TtsProgram(
-        name="magpie",
+        name="Magpie",
         description="Magpie TTS",
         attribution=ATTRIBUTION,
         installed=True,
