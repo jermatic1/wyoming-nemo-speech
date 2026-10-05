@@ -37,3 +37,17 @@ def test_unknown_key_is_rejected(tmp_path: Path) -> None:
     path.write_text("[asr]\nlanguage = 'en'\n")
     with pytest.raises(ValueError, match="asr.language"):
         load(path)
+
+
+def test_speakers_section(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text('[speakers]\ndir = "~/voices"\nthreshold = 0.7\nprefix = ""\n')
+    config = load(path)
+    assert config.speakers.dir == Path.home() / "voices"
+    assert config.speakers.threshold == 0.7
+    assert config.speakers.prefix == ""
+    assert config.speakers.enabled is True
+    assert config.speakers.model == "titanet-large"
+    path.write_text("[speakers]\nvoices = 'x'\n")
+    with pytest.raises(ValueError, match="speakers.voices"):
+        load(path)

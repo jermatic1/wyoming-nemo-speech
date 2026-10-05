@@ -8,6 +8,7 @@ services:
     pull_policy: missing
     volumes:
       - ./config.toml:/app/config.toml:ro
+      - ./speakers:/app/speakers:ro
       - nemo-models:/models
     ports:
       - "10400:10400"

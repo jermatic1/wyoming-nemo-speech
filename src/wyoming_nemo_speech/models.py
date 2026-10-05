@@ -2,14 +2,28 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 import subprocess
+import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
 _LOGGER = logging.getLogger(__name__)
+
+# Speaker models are plain ONNX files from the sherpa-onnx release.
+SPEAKER_RELEASE = (
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
+    "speaker-recongition-models/"
+)
+SPEAKER_MODELS = {
+    "titanet-large": (
+        "nemo_en_titanet_large.onnx",
+        "d51abcf31717ef28162f26acb9d44dd4127c3d44c9b8624f699f3425daca8e77",
+    ),
+}
 
 
 class MissingModel(FileNotFoundError):
@@ -22,6 +36,39 @@ def asr_model(name: str, lib_dir: Path) -> Path:
 
 def tts_models(name: str, lib_dir: Path) -> tuple[Path, Path, Path]:
     return _resolve_or_pull(name, lib_dir, resolve_tts_models)
+
+
+def speaker_model(name: str) -> Path:
+    """An ONNX file by path or alias, downloaded into the cache if missing."""
+    path = Path(name).expanduser()
+    if path.is_file():
+        return path
+    key = name.strip().lower()
+    if key not in SPEAKER_MODELS:
+        raise FileNotFoundError(f"unknown speaker model: {name}")
+    filename, sha256 = SPEAKER_MODELS[key]
+    target = (
+        _cache_root() / "k2-fsa" / "sherpa-onnx" / "speaker-recongition-models"
+    ) / filename
+    if not target.is_file():
+        _download(SPEAKER_RELEASE + filename, target, sha256)
+    return target
+
+
+def _download(url: str, path: Path, sha256: str) -> None:
+    _LOGGER.info("Downloading %s", url)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    part = path.with_name(path.name + ".part")
+    digest = hashlib.sha256()
+    with urllib.request.urlopen(url) as response, part.open("wb") as out:
+        while chunk := response.read(1 << 20):
+            digest.update(chunk)
+            out.write(chunk)
+    if digest.hexdigest() != sha256:
+        part.unlink()
+        raise ValueError(f"checksum mismatch for {url}")
+    part.replace(path)
+    _LOGGER.info("Saved %s", path)
 
 
 def pull(name: str, lib_dir: Path) -> None:

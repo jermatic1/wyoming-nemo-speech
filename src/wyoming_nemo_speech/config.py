@@ -34,6 +34,16 @@ class HomeAssistant:
 
 
 @dataclass(frozen=True)
+class Speakers:
+    enabled: bool = True
+    dir: Path = Path("speakers")
+    model: str = "titanet-large"
+    threshold: float = 0.6
+    min_seconds: float = 0.5
+    prefix: str = "I'm {name}. {text}"
+
+
+@dataclass(frozen=True)
 class Config:
     lib_dir: Path = field(default_factory=default_lib_dir)
     device: str = "cpu"
@@ -42,15 +52,23 @@ class Config:
     asr: Asr = field(default_factory=Asr)
     tts: Tts = field(default_factory=Tts)
     home_assistant: HomeAssistant = field(default_factory=HomeAssistant)
+    speakers: Speakers = field(default_factory=Speakers)
 
 
-SECTIONS = {"asr": Asr, "tts": Tts, "home_assistant": HomeAssistant}
+SECTIONS = {
+    "asr": Asr,
+    "tts": Tts,
+    "home_assistant": HomeAssistant,
+    "speakers": Speakers,
+}
 
 
 def load(path: Path = CONFIG_PATH) -> Config:
     if not path.is_file():
         return Config()
     data = tomllib.loads(path.read_text())
+    if "dir" in data.get("speakers", {}):
+        data["speakers"]["dir"] = Path(data["speakers"]["dir"]).expanduser()
     for name, section in SECTIONS.items():
         if name in data:
             data[name] = _build(section, data[name], f"{name}.")

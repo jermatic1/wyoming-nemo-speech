@@ -40,6 +40,40 @@ a long-lived access token in your Home Assistant profile and set
 `home_assistant.token` in `config.toml`. Names are fetched at startup and
 refreshed once a day.
 
+## Speaker identification
+
+To tell family members apart, record each person and put the files under
+`speakers/<Name>/`. Three to five clips of five to ten seconds each are
+enough: have the person talk naturally, as if asking the assistant for
+something, from where they usually speak to it. Use the same microphone the
+assistant hears if you can. Files must be 16 kHz mono 16-bit WAV. Trim leading
+and trailing silence. On Linux, this records one eight second clip:
+
+```sh
+mkdir -p speakers/Jeremy
+arecord -f S16_LE -r 16000 -c 1 -d 8 speakers/Jeremy/1.wav
+```
+
+The TitaNet model is downloaded on first start. Then
+
+```sh
+uv run wyoming-nemo-speech speakers
+```
+
+prints how closely each file matches its speaker and how far the speakers are
+from each other. Scores are cosine similarities. Each file should score well
+above `speakers.threshold` and each pair of speakers well below it.
+
+When a speaker is recognised, their name is put into the transcript using
+`speakers.prefix`, so "turn on the lights" from Jeremy reaches the
+conversation agent as "I'm Jeremy. turn on the lights". Describe your family
+in the agent's instructions, for example who is a child and what they like,
+and the agent can respond accordingly. Prefixed commands are not matched by
+Home Assistant's built-in sentences, so an LLM agent should handle them.
+Unrecognised voices get the plain transcript. The speaker and score are also
+sent in the Wyoming transcript's `context`, which Home Assistant does not read
+yet.
+
 ## Configuration
 
 The server reads `config.toml` from the working directory. Every key is

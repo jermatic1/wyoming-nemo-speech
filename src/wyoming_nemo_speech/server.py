@@ -26,6 +26,7 @@ from wyoming_nemo_speech.asr import Recognizer
 from wyoming_nemo_speech.libasr import pcm16_to_f32
 from wyoming_nemo_speech.names import HassNameCache
 from wyoming_nemo_speech.normalize import sentences, spoken
+from wyoming_nemo_speech.speakers import Identifier, Match, prefix
 from wyoming_nemo_speech.tts import Synthesizer, resolve_voice
 
 _LOGGER = logging.getLogger(__name__)
@@ -66,6 +67,8 @@ class SpeechEventHandler(AsyncEventHandler):
         info: Info,
         boost: float,
         names: HassNameCache | None,
+        speakers: Identifier | None,
+        speaker_prefix: str,
         *args,
         **kwargs,
     ) -> None:
@@ -75,6 +78,8 @@ class SpeechEventHandler(AsyncEventHandler):
         self._info = info.event()
         self._boost = boost
         self._names = names
+        self._speakers = speakers
+        self._speaker_prefix = speaker_prefix
         self._rate: int | None = None
         self._samples: list[array.array] = []
         self._tts_voice: str | None = None
@@ -116,30 +121,60 @@ class SpeechEventHandler(AsyncEventHandler):
     async def _transcribe(self) -> None:
         text = ""
         seconds = 0.0
+        context = None
+        speaker = "-"
         begin = time.perf_counter()
         if self._samples and self._rate:
-            seconds = sum(len(chunk) for chunk in self._samples) / self._rate
-            phrases = self._names.phrases() if self._names is not None else []
-            try:
-                text = await asyncio.to_thread(
-                    self._recognizer.recognize,
-                    _concat(self._samples),
-                    self._rate,
-                    LANGUAGE,
-                    phrases or None,
-                    self._boost,
-                )
-            except Exception:
-                _LOGGER.exception("Recognition failed")
+            rate = self._rate
+            samples = _concat(self._samples)
+            seconds = len(samples) / rate
+            text, match = await asyncio.gather(
+                self._recognize(samples, rate), self._identify(samples, rate)
+            )
+            if self._speakers is not None:
+                name = match.name if match else None
+                context = {
+                    "speaker": name,
+                    "speaker_score": match.score if match else None,
+                }
+                speaker = f"{name} {match.score:.2f}" if match else "unknown"
+                text = prefix(self._speaker_prefix, name, text)
         _LOGGER.info(
-            "Transcript (%.1fs audio, %.2fs): %s",
+            "Transcript (%.1fs audio, %.2fs, speaker %s): %s",
             seconds,
             time.perf_counter() - begin,
+            speaker,
             text,
         )
-        await self.write_event(Transcript(text=text, language=LANGUAGE).event())
+        await self.write_event(
+            Transcript(text=text, language=LANGUAGE, context=context).event()
+        )
         if self._names is not None:
             self._names.maybe_refresh()
+
+    async def _recognize(self, samples: array.array, rate: int) -> str:
+        phrases = self._names.phrases() if self._names is not None else []
+        try:
+            return await asyncio.to_thread(
+                self._recognizer.recognize,
+                samples,
+                rate,
+                LANGUAGE,
+                phrases or None,
+                self._boost,
+            )
+        except Exception:
+            _LOGGER.exception("Recognition failed")
+            return ""
+
+    async def _identify(self, samples: array.array, rate: int) -> Match | None:
+        if self._speakers is None:
+            return None
+        try:
+            return await asyncio.to_thread(self._speakers.identify_audio, samples, rate)
+        except Exception:
+            _LOGGER.exception("Speaker identification failed")
+            return None
 
     async def _synthesize(self, request: Synthesize) -> None:
         voice = self._voice(request.voice)

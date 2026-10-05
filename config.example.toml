@@ -18,6 +18,20 @@ speech_context_boost = 2.5
 [tts]
 model = "magpie"
 
+[speakers]
+# Who is speaking, from recordings in speakers/<Name>/*.wav. Off when the
+# directory is missing.
+enabled = true
+dir = "speakers"
+# An alias or the path to an ONNX speaker embedding model.
+model = "titanet-large"
+# Cosine score needed to name a speaker. Lower names more, mislabels more.
+threshold = 0.6
+# Shorter audio is not identified.
+min_seconds = 0.5
+# Prepended to the transcript when a speaker is identified. Empty disables.
+prefix = "I'm {name}. {text}"
+
 [home_assistant]
 url = "http://homeassistant.local:8123"
 # A long-lived access token. Names are only fetched when this is set.

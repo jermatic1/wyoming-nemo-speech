@@ -17,6 +17,7 @@ from wyoming.tts import (
 from wyoming_nemo_speech.asr import asr_program
 from wyoming_nemo_speech.names import HassNameCache, NameList
 from wyoming_nemo_speech.server import SpeechEventHandler
+from wyoming_nemo_speech.speakers import Match
 from wyoming_nemo_speech.tts import tts_program
 
 
@@ -61,18 +62,35 @@ class FakeHass:
         return NameList(used_areas=["Office"], priority_entities=["Floor Lamp"])
 
 
+class FakeIdentifier:
+    def __init__(self, match: Match | None) -> None:
+        self.match = match
+        self.calls: list[tuple[int, int]] = []
+        self.error: Exception | None = None
+
+    def identify_audio(self, samples, sample_rate) -> Match | None:
+        self.calls.append((len(samples), sample_rate))
+        if self.error is not None:
+            raise self.error
+        return self.match
+
+
 class RecordingHandler(SpeechEventHandler):
     def __init__(
         self,
         recognizer: FakeRecognizer,
         synthesizer: FakeSynthesizer,
         names: HassNameCache | None = None,
+        speakers: FakeIdentifier | None = None,
+        prefix: str = "I'm {name}. {text}",
     ) -> None:
         info = Info(
             asr=[asr_program("nemotron-en")],
             tts=[tts_program(synthesizer.speakers)],
         )
-        super().__init__(recognizer, synthesizer, info, 2.5, names, None, None)
+        super().__init__(
+            recognizer, synthesizer, info, 2.5, names, speakers, prefix, None, None
+        )
         self.sent: list[Event] = []
 
     async def write_event(self, event: Event) -> None:
@@ -158,6 +176,61 @@ async def test_names_are_passed_as_phrases() -> None:
     handler = RecordingHandler(recognizer, FakeSynthesizer(), names)
     await utterance(handler, pcm16(0))
     assert recognizer.calls[0]["phrases"] == ["Office", "Floor Lamp"]
+
+
+async def test_identified_speaker_prefixes_transcript() -> None:
+    speakers = FakeIdentifier(Match("Jeremy", 0.81))
+    handler = RecordingHandler(FakeRecognizer(), FakeSynthesizer(), speakers=speakers)
+    await utterance(handler, pcm16(1, 2, 3), rate=22050)
+    assert speakers.calls == [(3, 22050)]
+    transcript = Transcript.from_event(handler.sent[-1])
+    assert transcript.text == "I'm Jeremy. office lights"
+    assert transcript.context == {"speaker": "Jeremy", "speaker_score": 0.81}
+
+
+async def test_unknown_speaker_leaves_transcript_alone() -> None:
+    handler = RecordingHandler(
+        FakeRecognizer(), FakeSynthesizer(), speakers=FakeIdentifier(None)
+    )
+    await utterance(handler, pcm16(0))
+    transcript = Transcript.from_event(handler.sent[-1])
+    assert transcript.text == "office lights"
+    assert transcript.context == {"speaker": None, "speaker_score": None}
+
+
+async def test_empty_transcript_is_not_prefixed() -> None:
+    recognizer = FakeRecognizer()
+    recognizer.error = RuntimeError("boom")
+    handler = RecordingHandler(
+        recognizer, FakeSynthesizer(), speakers=FakeIdentifier(Match("Jeremy", 0.9))
+    )
+    await utterance(handler, pcm16(0))
+    assert Transcript.from_event(handler.sent[-1]).text == ""
+
+
+async def test_identification_failure_still_transcribes() -> None:
+    speakers = FakeIdentifier(None)
+    speakers.error = RuntimeError("boom")
+    handler = RecordingHandler(FakeRecognizer(), FakeSynthesizer(), speakers=speakers)
+    await utterance(handler, pcm16(0))
+    transcript = Transcript.from_event(handler.sent[-1])
+    assert transcript.text == "office lights"
+    assert transcript.context == {"speaker": None, "speaker_score": None}
+
+
+async def test_no_identifier_sends_no_context() -> None:
+    handler = RecordingHandler(FakeRecognizer(), FakeSynthesizer())
+    await utterance(handler, pcm16(0))
+    assert Transcript.from_event(handler.sent[-1]).context is None
+
+
+async def test_transcription_logs_speaker(caplog) -> None:
+    handler = RecordingHandler(
+        FakeRecognizer(), FakeSynthesizer(), speakers=FakeIdentifier(Match("Jade", 0.7))
+    )
+    with caplog.at_level(logging.INFO):
+        await utterance(handler, pcm16(0))
+    assert "speaker Jade 0.70): I'm Jade. office lights" in caplog.text
 
 
 async def test_synthesize_streams_pcm() -> None:

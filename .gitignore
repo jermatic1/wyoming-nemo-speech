@@ -7,3 +7,4 @@ dist/
 *.egg-info/
 .env
 config.toml
+speakers/
