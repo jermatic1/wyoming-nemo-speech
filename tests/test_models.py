@@ -153,3 +153,39 @@ def test_speaker_model_accepts_a_path(tmp_path: Path) -> None:
     assert speaker_model(str(path)) == path
     with pytest.raises(FileNotFoundError, match="unknown speaker model"):
         speaker_model("ecapa")
+
+
+def test_tts_local_model_uses_index_codec(lib_dir: Path, tmp_path: Path) -> None:
+    codec = tmp_path / "cache" / "nvidia" / "nemo-nano-codec" / "r3" / "codec.gguf"
+    _touch(codec)
+    model = tmp_path / "custom" / "magpie-home.f16.gguf"
+    tokenizer = tmp_path / "custom" / "nemo"
+    _touch(model)
+    tokenizer.mkdir()
+    assert tts_models("magpie", lib_dir, model_path=model, tokenizer_dir=tokenizer) == (
+        model,
+        codec,
+        tokenizer,
+    )
+    own_codec = tmp_path / "custom" / "codec.gguf"
+    _touch(own_codec)
+    result = tts_models(
+        "magpie",
+        lib_dir,
+        model_path=model,
+        tokenizer_dir=tokenizer,
+        codec_path=own_codec,
+    )
+    assert result == (model, own_codec, tokenizer)
+
+
+def test_tts_local_model_must_exist(lib_dir: Path, tmp_path: Path) -> None:
+    tokenizer = tmp_path / "nemo"
+    tokenizer.mkdir()
+    with pytest.raises(FileNotFoundError, match="tts.model_path"):
+        tts_models(
+            "magpie",
+            lib_dir,
+            model_path=tmp_path / "missing.gguf",
+            tokenizer_dir=tokenizer,
+        )

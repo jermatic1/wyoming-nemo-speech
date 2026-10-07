@@ -85,7 +85,13 @@ async def main() -> None:
         gpu = 0
 
     asr_path = asr_model(config.asr.model, config.lib_dir)
-    magpie, codec, tokenizer = tts_models(config.tts.model, config.lib_dir)
+    magpie, codec, tokenizer = tts_models(
+        config.tts.model,
+        config.lib_dir,
+        model_path=config.tts.model_path,
+        tokenizer_dir=config.tts.tokenizer_dir,
+        codec_path=config.tts.codec_path,
+    )
     asr_library = load_asr(config.lib_dir)
     tts_library = load_tts(config.lib_dir)
     recognizer = asr_library.create(asr_path, gpu)

@@ -40,6 +40,23 @@ a long-lived access token in your Home Assistant profile and set
 `home_assistant.token` in `config.toml`. Names are fetched at startup and
 refreshed once a day.
 
+## Model files
+
+By default the text-to-speech model comes from NeMo-Speech.cpp's model index.
+To use specific files instead, such as a model with added voices exported by
+[nemo-training](../nemo-training), name the GGUF and the extracted checkpoint
+directory in `config.toml`:
+
+```toml
+[tts]
+model_path = "/models/tts/magpie-home.f16.gguf"
+tokenizer_dir = "/models/tts/nemo"
+```
+
+Voices appear in Home Assistant under the names in that directory's speaker
+map. With Docker, put both in a folder and mount it, as in the commented
+`compose.yml` line.
+
 ## Speaker identification
 
 To tell family members apart, record each person and put the files under

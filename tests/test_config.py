@@ -51,3 +51,19 @@ def test_speakers_section(tmp_path: Path) -> None:
     path.write_text("[speakers]\nvoices = 'x'\n")
     with pytest.raises(ValueError, match="speakers.voices"):
         load(path)
+
+
+def test_tts_local_model(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text(
+        '[tts]\nmodel_path = "~/voices/magpie-home.f16.gguf"\n'
+        'tokenizer_dir = "~/voices/nemo"\n'
+    )
+    config = load(path)
+    assert config.tts.model == "magpie"
+    assert config.tts.model_path == Path.home() / "voices" / "magpie-home.f16.gguf"
+    assert config.tts.tokenizer_dir == Path.home() / "voices" / "nemo"
+    assert config.tts.codec_path is None
+    path.write_text('[tts]\nmodel_path = "magpie.gguf"\n')
+    with pytest.raises(ValueError, match="tokenizer_dir"):
+        load(path)

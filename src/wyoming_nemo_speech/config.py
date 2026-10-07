@@ -3,7 +3,7 @@
 import tomllib
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 CONFIG_PATH = Path("config.toml")
 LIB_DIRS = (Path("/opt/nemo-speech"), Path.home() / ".local" / "share" / "nemo-speech")
@@ -25,6 +25,18 @@ class Asr:
 @dataclass(frozen=True)
 class Tts:
     model: str = "magpie"
+    # Model files to use instead of looking `model` up in the index: the GGUF
+    # and the extracted checkpoint directory that holds its tokenizer assets
+    # and speaker map. The codec comes from the index unless given.
+    model_path: Path | None = None
+    tokenizer_dir: Path | None = None
+    codec_path: Path | None = None
+
+    def __post_init__(self) -> None:
+        if (self.model_path is None) != (self.tokenizer_dir is None):
+            raise ValueError(
+                "tts.model_path and tts.tokenizer_dir must be set together"
+            )
 
 
 @dataclass(frozen=True)
@@ -67,19 +79,21 @@ def load(path: Path = CONFIG_PATH) -> Config:
     if not path.is_file():
         return Config()
     data = tomllib.loads(path.read_text())
-    if "dir" in data.get("speakers", {}):
-        data["speakers"]["dir"] = Path(data["speakers"]["dir"]).expanduser()
     for name, section in SECTIONS.items():
         if name in data:
             data[name] = _build(section, data[name], f"{name}.")
-    if "lib_dir" in data:
-        data["lib_dir"] = Path(data["lib_dir"]).expanduser()
     return _build(Config, data, "")
 
 
 def _build(cls: type, data: dict[str, Any], prefix: str) -> Any:
-    known = {item.name for item in fields(cls)}
-    for key in data:
+    known = {item.name: item.type for item in fields(cls)}
+    for key, value in data.items():
         if key not in known:
             raise ValueError(f"unknown config key: {prefix}{key}")
+        if _is_path(known[key]) and isinstance(value, str):
+            data[key] = Path(value).expanduser()
     return cls(**data)
+
+
+def _is_path(annotation: Any) -> bool:
+    return annotation is Path or Path in get_args(annotation)

@@ -17,6 +17,11 @@ speech_context_boost = 2.5
 
 [tts]
 model = "magpie"
+# Model files to use instead of looking `model` up in the index, for example
+# a model exported by nemo-training. The codec still comes from the index
+# unless codec_path is set.
+# model_path = "/models/tts/magpie-home.f16.gguf"
+# tokenizer_dir = "/models/tts/nemo"
 
 [speakers]
 # Who is speaking, from recordings in speakers/<Name>/*.wav. Off when the

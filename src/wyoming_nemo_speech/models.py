@@ -34,8 +34,32 @@ def asr_model(name: str, lib_dir: Path) -> Path:
     return _resolve_or_pull(name, lib_dir, resolve_asr_model)
 
 
-def tts_models(name: str, lib_dir: Path) -> tuple[Path, Path, Path]:
-    return _resolve_or_pull(name, lib_dir, resolve_tts_models)
+def tts_models(
+    name: str,
+    lib_dir: Path,
+    *,
+    model_path: Path | None = None,
+    tokenizer_dir: Path | None = None,
+    codec_path: Path | None = None,
+) -> tuple[Path, Path, Path]:
+    """The Magpie GGUF, codec GGUF and tokenizer directory.
+
+    With model_path and tokenizer_dir set, those are used as given and only the
+    codec, which fine-tunes share with the stock model, comes from the index.
+    """
+    if model_path is None or tokenizer_dir is None:
+        return _resolve_or_pull(name, lib_dir, resolve_tts_models)
+    for path, kind in (
+        (model_path, "tts.model_path"),
+        (tokenizer_dir, "tts.tokenizer_dir"),
+    ):
+        if not path.exists():
+            raise FileNotFoundError(f"{kind} does not exist: {path}")
+    if codec_path is None:
+        codec_path = _resolve_or_pull(name, lib_dir, resolve_tts_codec)
+    elif not codec_path.is_file():
+        raise FileNotFoundError(f"tts.codec_path does not exist: {codec_path}")
+    return model_path, codec_path, tokenizer_dir
 
 
 def speaker_model(name: str) -> Path:
@@ -93,6 +117,12 @@ def resolve_tts_models(name: str, lib_dir: Path) -> tuple[Path, Path, Path]:
         _checked(_artifact_path(codec, "codec"), name),
         _checked(_artifact_path(model, "tokenizer"), name),
     )
+
+
+def resolve_tts_codec(name: str, lib_dir: Path) -> Path:
+    index = _load_index(lib_dir)
+    codec = _find_model(index, _find_model(index, name)["companions"][0])
+    return _checked(_artifact_path(codec, "codec"), codec["repo"])
 
 
 def _resolve_or_pull[T](
